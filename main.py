@@ -1,4 +1,4 @@
-from hatbot.hat_bot import Bot
+from hat_bot import Bot
 
 
 def main():

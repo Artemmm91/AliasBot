@@ -1,6 +1,6 @@
 from keyboards import lobby_keyboard
 
-from hatbot.messages_rus import msg_not_admin
+from messages_rus import msg_not_admin
 
 
 def admin_required(func):

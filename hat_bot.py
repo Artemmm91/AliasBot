@@ -10,7 +10,7 @@ from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
 from vk_api.utils import get_random_id
 from word_bank import words_easy, words_medium, words_hard
 
-from hatbot.decorators import admin_required
+from decorators import admin_required
 
 
 class Bot:
@@ -119,7 +119,6 @@ class Bot:
         player = self.players[self.player_id]
         i = self.sessions[player[0]][0].index(self.player_id)
         self.sessions[player[0]][4] = self.sessions[player[0]][0][(i + 1) % len(self.sessions[player[0]][0])]
-        print(self.sessions[player[0]][4], i, (i + 1) % len(self.sessions[player[0]][0]))
 
     def leave_session(self):  # выход игрока из сессии
         if self.player_id in self.players:

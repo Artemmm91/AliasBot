@@ -1,6 +1,5 @@
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
-
-from hatbot import messages_rus as msg
+import messages_rus as msg
 
 
 def game_kb():
