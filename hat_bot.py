@@ -120,17 +120,23 @@ class Bot:
         i = self.sessions[player[0]][0].index(self.player_id)
         self.sessions[player[0]][4] = self.sessions[player[0]][0][(i + 1) % len(self.sessions[player[0]][0])]
 
+    def next_leave(self):
+        player = self.players[self.player_id]
+        player_session = self.sessions[player[0]]
+        if player_session[4] == self.player_id:  # если он следующий, то берем следующего
+            self.next_queue()
+            peer = self.players[player_session[4]][3]
+            if player_session[4] != self.player_id:  # если он один в игре, то не пишем ничего
+                self.msg_send(msg_next, peer=peer)
+            if player[1][4] != -1:  # если был его ход, то заканчиваем
+                player_session[3] = 0
+
     def leave_session(self):  # выход игрока из сессии
         if self.player_id in self.players:
             player = self.players[self.player_id]
             if player[0] is not None:  # если игрок состоит в какой-то сессии
                 player_session = self.sessions[player[0]]  # узнаем сессию игрока и удаляем его из players
-                if player_session[4] == self.player_id:  # если он следующий, то берем следующего
-                    self.next_queue()
-                    peer = self.players[player_session[4]][3]
-                    self.msg_send(msg_next, peer=peer)
-                    if player[1][4] != -1:
-                        player_session[3] = 0
+                self.next_leave()
                 player_session[0].remove(self.player_id)  # удаляем игрока из массива участников сессии
                 if len(player_session[0]) == 0:  # если в сессии не осталось игроков, то удаляем и ее
                     self.sessions.pop(player[0])
