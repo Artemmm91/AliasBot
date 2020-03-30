@@ -17,7 +17,7 @@ def customizing_kb():
     kb.add_line()
     kb.add_button(msg.msg_change_difficult, color=VkKeyboardColor.DEFAULT)
     kb.add_line()
-    kb.add_button(msg.msg_stop_settings, color=VkKeyboardColor.DEFAULT)
+    kb.add_button(msg.msg_stop_settings, color=VkKeyboardColor.NEGATIVE)
     return kb.get_keyboard()
 
 
