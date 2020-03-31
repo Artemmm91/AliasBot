@@ -17,6 +17,8 @@ def customizing_kb():
     kb.add_line()
     kb.add_button(msg.msg_change_difficult, color=VkKeyboardColor.DEFAULT)
     kb.add_line()
+    kb.add_button(msg.msg_let_input, color=VkKeyboardColor.DEFAULT)
+    kb.add_line()
     kb.add_button(msg.msg_stop_settings, color=VkKeyboardColor.NEGATIVE)
     return kb.get_keyboard()
 
@@ -29,8 +31,9 @@ def lobby_kb():
     kb.add_button(msg.msg_queue, color=VkKeyboardColor.DEFAULT)
     kb.add_line()
     kb.add_button(msg.msg_leave, color=VkKeyboardColor.DEFAULT)
+    kb.add_line()
+    kb.add_button(msg.msg_add_words, color=VkKeyboardColor.DEFAULT)
     return kb.get_keyboard()
-
 
 def admin_lobby_kb():
     kb = VkKeyboard(one_time=True)
@@ -42,6 +45,8 @@ def admin_lobby_kb():
     kb.add_button(msg.msg_leave, color=VkKeyboardColor.DEFAULT)
     kb.add_line()
     kb.add_button(msg.msg_settings, color=VkKeyboardColor.DEFAULT)
+    kb.add_line()
+    kb.add_button(msg.msg_add_words, color=VkKeyboardColor.DEFAULT)
     return kb.get_keyboard()
 
 
