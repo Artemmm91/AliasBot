@@ -155,7 +155,6 @@ class Bot:
 
         else:  # если ее нет, то создаем ее
             self.sessions[game_code] = [[self.player_id], [], [0, 0, 0], 0, self.player_id]
-            print(self.player_id)
             self.players[self.player_id][0] = game_code  # добавляем игрока в сессию в качестве администратора
             self.players[self.player_id][1][6] = 1  # присваеваем игроку флаг администратора
             self.random_hat()  # создаем шляпу случайным образом
