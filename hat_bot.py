@@ -49,7 +49,9 @@ class Bot:
         # для каждого ключа, кода сессии, значение - массив из 5 полей
         # нулевое поле - массив игроков, участвующих в игре
         #       нулевой игрок - администратор
-        # первое поле - массив слов, которые лежат в шляпе
+        # первое поле - два массива:
+        #       первый массив - массив слов, которые положили в шляпу из базы
+        #       второй массив - массив слов, добавленные игроками
         # второе поле - массив из четырех элементов, -1 - если сейчас ожидается ввод числа слов такого типа:
         #       нулевое поле - начальное количество легких слов
         #       первое поле - начальное количество средних слов
@@ -64,12 +66,14 @@ class Bot:
         # первое поле - массив флагов:
         #       нулевое поле - последняя клавиатура, чтобы вызывать при msg_wtf
         #       первое поле - флаг времени игрока, если оно 0 - значит не прошло, а если 1 - слова выдаваться не будут
-        #       второе поле - последнее слово - чтобо возвращать в шляпу, если не угадать
+        #       второе поле - последнее слово - чтобы возвращать в шляпу, если не угадать
         #       третье поле - флаг пишущего game code игрока: 0 - не пишет, 1 - сейчас должен написать
         #       четвертое поле - уникальный код хода
         #       пятое поле - количество очков игрока
         #       шестое поле - является ли администртором сессии: 0 - нет, 1 - да
-        #       седьмое поле - флаг игрока, который может ввести слова: 0 - не может, 1 - может
+        #       седьмое поле - флаг игрока, который может ввести слова: 0 - не может, 1 - может,
+        #                       2 - это админ, который вводит количесвто слов
+        #       восьмое поле - 0, если текущее слово взято из случайной шляпы, 1 - если из кастомной
         # второе поле - имя игрока
         # третье поле - peer_id игрока
 
@@ -90,6 +94,7 @@ class Bot:
         self.players[self.player_id][1][2] = None
         self.players[self.player_id][1][3] = 0
         self.players[self.player_id][1][4] = -1
+        self.players[self.player_id][1][8] = -1
         self.sessions[self.players[self.player_id][0]][3] = 0  # показываем что ход закончен
 
     def del_player(self):  # удаляем игрока
@@ -113,7 +118,7 @@ class Bot:
 
     def begin_game(self):  # начальный экран
         self.leave_session()  # уходим из сессии если игрок в ней состоит
-        self.players[self.player_id] = [None, [None, 0, None, 1, -1, 0, 0, 0], '', self.event.obj.peer_id]
+        self.players[self.player_id] = [None, [None, 0, None, 1, -1, 0, 0, 0, -1], '', self.event.obj.peer_id]
         user_information = self.vk.users.get(user_ids=self.player_id)[0]
         user_name = user_information['first_name'] + ' ' + user_information['last_name']
         self.players[self.player_id][2] = user_name  # регистрация игрока и ставим флаг, что ждем game code
@@ -165,7 +170,7 @@ class Bot:
             self.already_playing(game_code)
 
         else:  # если ее нет, то создаем ее
-            self.sessions[game_code] = [[self.player_id], [], [0, 0, 0, 0], 0, self.player_id]
+            self.sessions[game_code] = [[self.player_id], [[], []], [0, 0, 0, 0], 0, self.player_id]
             self.players[self.player_id][0] = game_code  # добавляем игрока в сессию в качестве администратора
             self.players[self.player_id][1][6] = 1  # присваеваем игроку флаг администратора
             self.random_hat()  # создаем шляпу случайным образом
@@ -177,7 +182,7 @@ class Bot:
         else:
             return lobby_keyboard
 
-    def start_game(self):  # начало ход
+    def start_game(self):  # начало хода
         player_id = self.player_id
         if self.sessions[self.players[player_id][0]][3] == 0 and \
                 self.sessions[self.players[player_id][0]][4] == self.player_id:  # начинаем ход, только если он не идет
@@ -198,15 +203,24 @@ class Bot:
             self.msg_send(msg_turn_going, self.return_lobby())
 
     def give_word(self):  # функция выдачи игроку слова
-        words_remaining = self.sessions[self.players[self.player_id][0]][1]  # массив оставшихся слов
+        remaining_random = self.sessions[self.players[self.player_id][0]][1][0]
+        remaining_custom = self.sessions[self.players[self.player_id][0]][1][1]
+        words_remaining = remaining_random + remaining_custom  # массив оставшихся слов
         if len(words_remaining) > 0:  # если еще остались слова
             i_word = random.randint(0, len(words_remaining) - 1)
             new_word = words_remaining[i_word]  # выбираем случайное слово
-            del words_remaining[i_word]  # удаляем это слово из шляпы
+            if i_word < len(remaining_random):
+                self.players[self.player_id][1][8] = 0
+                del remaining_random[i_word]
+            else:
+                self.players[self.player_id][1][8] = 1
+                del remaining_custom[i_word-len(remaining_random)]
             self.players[self.player_id][1][2] = new_word  # записываем последнее выданное слово
             self.msg_send(new_word, game_keyboard)
         else:  # если слов не осталось
-            self.end_turn()
+            self.next_queue()
+            self.null_flag()
+            self.msg_send(msg_zero_words, self.return_lobby())
 
     def done_word(self):  # функция угадывания слова
         self.players[self.player_id][1][5] += 1  # увеличиваем счет игрока
@@ -218,7 +232,10 @@ class Bot:
     def pass_word(self):  # функция заканчивания хода
         last_word = self.players[self.player_id][1][2]  # берем последнее слово игрока
         if last_word is not None:  # если оно было
-            self.sessions[self.players[self.player_id][0]][1].append(last_word)  # возвращаем слово в шляпу
+            if self.players[self.player_id][1][8] == 0:
+                self.sessions[self.players[self.player_id][0]][1][0].append(last_word) # возвращаем слово в шляпу
+            else:
+                self.sessions[self.players[self.player_id][0]][1][1].append(last_word)  # возвращаем слово в шляпу
         self.end_turn()
 
     def done_pass_check(self):  # функция проверки условий на done/pass
@@ -292,22 +309,26 @@ class Bot:
 
     def activate_input(self): # теперь каждый игрок может вводить слова
         player_session = self.sessions[self.players[self.player_id][0]]
-        for player in player_session[0]:
+        for player in player_session[0]: # теперь каждый игрок может вводить слова
             self.players[player][1][7] = 1
-        self.players[player_session[0][0]][1][7] = 2
+        self.players[player_session[0][0]][1][7] = 2 # админу даем право ввести количество слов
         self.msg_send(msg_add_how_many)
 
-    def add_words(self):
+    def add_words(self): # говорим игроку, сколько слов он может ввести
         player_session = self.players[self.player_id][0]
-        if self.players[self.player_id][1][7] == 1:
+        words_quantity = self.sessions[player_session][2][3]
+        if self.players[self.player_id][1][7] == 1 and words_quantity != 0: # проверяем, может ли он вводить слова
             words_quantity = self.sessions[player_session][2][3]
             self.msg_send(msg_add_words_quantity + str(words_quantity))
             self.msg_send(msg_how_to_add_words)
+            self.players[self.player_id][1][7] = 3
         else:
-            if self.players[self.player_id][1][6] == 1:
+            if self.players[self.player_id][1][6] == 1: # говорим, что ввод слов запрещен
                 self.msg_send(msg_add_words_denied_admin, self.return_lobby())
+                self.players[self.player_id][1][7] = 0
             else:
                 self.msg_send(msg_add_words_denied, self.return_lobby())
+                self.players[self.player_id][1][7] = 0
 
     @admin_required
     def input_change(self):
@@ -327,17 +348,21 @@ class Bot:
             self.input_rank(i)
 
     def adding_custom_words(self):
-        word_list = self.event.obj.text.split()
+        word_list = self.event.obj.text.split() # переводим введенную строку в список
         player_session = self.players[self.player_id][0]
-        self.sessions[player_session][1] += word_list
-        self.players[self.player_id][1][7] = 0
+        if len(word_list) > self.sessions[player_session][2][3]: # смотрим, не длинноват ли список
+            self.msg_send(msg_try_again_adding)
+        else:
+            self.sessions[player_session][1][1] += word_list
+            self.players[self.player_id][1][7] = 0 # теперь человек больше не может ничего ввести
+            self.msg_send(msg_adding_done, self.return_lobby())
 
     def put_words(self):
         player_session = self.sessions[self.players[self.player_id][0]]
-        player_session[1] = []
-        player_session[1] += random.sample(words_easy, k=player_session[2][0])
-        player_session[1] += random.sample(words_medium, k=player_session[2][1])
-        player_session[1] += random.sample(words_hard, k=player_session[2][2])
+        player_session[1][0] = []
+        player_session[1][0] += random.sample(words_easy, k=player_session[2][0])
+        player_session[1][0] += random.sample(words_medium, k=player_session[2][1])
+        player_session[1][0] += random.sample(words_hard, k=player_session[2][2])
 
     @admin_required
     def current_hat(self):  # игра продолжается с текущей шляпой
@@ -360,6 +385,7 @@ class Bot:
                 number = 1000
             if self.players[self.player_id][1][7] == 2:
                 self.sessions[self.players[self.player_id][0]][2][3] = number
+                self.sessions[self.players[self.player_id][0]][1][1] = []
                 self.players[self.player_id][1][7] = 1
                 self.msg_send(msg_now_adding_possible + str(number), self.return_lobby())
             else:
@@ -382,7 +408,7 @@ class Bot:
                                 or self.players[self.player_id][1][7] == 2)\
                                 and self.players[self.player_id][1][6] == 1:
                             self.input_numb()
-                        elif self.players[self.player_id][1][7] == 1 and self.event.obj.text != msg_add_words:
+                        elif self.players[self.player_id][1][7] == 3 and self.event.obj.text != msg_add_words:
                             self.adding_custom_words()
                         elif self.event.obj.text in self.func_dict:
                             self.func_dict[self.event.obj.text]()
