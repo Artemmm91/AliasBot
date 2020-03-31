@@ -33,9 +33,11 @@ class Bot:
             msg_change_easy: self.input_change,
             msg_change_medium: self.input_change,
             msg_change_difficult: self.input_change,
+            msg_let_input: self.input_change,
             msg_stop_settings: self.stop_settings,
             msg_null_results: self.null_results,
             msg_queue: self.queue_turn,
+            msg_add_words: self.add_words
         }
 
         self.event = None
@@ -52,6 +54,7 @@ class Bot:
         #       нулевое поле - начальное количество легких слов
         #       первое поле - начальное количество средних слов
         #       второе поле - начальное количество сложных слов
+        #       третье поле - количество слов, которые может ввести каждый игрок
         # третье поле - идет ли сейчас ход, 0 - не идет, 1 - идет
         # четвертое поле - id следующего игрока в очереди
 
@@ -66,6 +69,7 @@ class Bot:
         #       четвертое поле - уникальный код хода
         #       пятое поле - количество очков игрока
         #       шестое поле - является ли администртором сессии: 0 - нет, 1 - да
+        #       седьмое поле - флаг игрока, который может ввести слова: 0 - не может, 1 - может
         # второе поле - имя игрока
         # третье поле - peer_id игрока
 
@@ -95,7 +99,7 @@ class Bot:
         self.next_queue()
         self.null_flag()
         peer = self.players[self.sessions[self.players[self.player_id][0]][4]][3]
-        self.return_lobby(msg_end_turn)
+        self.msg_send(msg_end_turn, self.return_lobby())
         self.msg_send(msg_next, peer=peer)
 
     def null_results(self):
@@ -109,7 +113,7 @@ class Bot:
 
     def begin_game(self):  # начальный экран
         self.leave_session()  # уходим из сессии если игрок в ней состоит
-        self.players[self.player_id] = [None, [None, 0, None, 1, -1, 0, 0], '', self.event.obj.peer_id]
+        self.players[self.player_id] = [None, [None, 0, None, 1, -1, 0, 0, 0], '', self.event.obj.peer_id]
         user_information = self.vk.users.get(user_ids=self.player_id)[0]
         user_name = user_information['first_name'] + ' ' + user_information['last_name']
         self.players[self.player_id][2] = user_name  # регистрация игрока и ставим флаг, что ждем game code
@@ -120,29 +124,35 @@ class Bot:
         i = self.sessions[player[0]][0].index(self.player_id)
         self.sessions[player[0]][4] = self.sessions[player[0]][0][(i + 1) % len(self.sessions[player[0]][0])]
 
-    def next_leave(self):
-        player = self.players[self.player_id]
-        player_session = self.sessions[player[0]]
-        if player_session[4] == self.player_id:  # если он следующий, то берем следующего
-            self.next_queue()
-            peer = self.players[player_session[4]][3]
-            if player_session[4] != self.player_id:  # если он один в игре, то не пишем ничего
-                self.msg_send(msg_next, peer=peer)
-            if player[1][4] != -1:  # если был его ход, то заканчиваем
-                player_session[3] = 0
-
     def leave_session(self):  # выход игрока из сессии
         if self.player_id in self.players:
             player = self.players[self.player_id]
             if player[0] is not None:  # если игрок состоит в какой-то сессии
                 player_session = self.sessions[player[0]]  # узнаем сессию игрока и удаляем его из players
-                self.next_leave()
+                if player_session[4] == self.player_id:  # если он следующий, то берем следующего
+                    self.next_queue()
+                    peer = self.players[player_session[4]][3]
+                    self.msg_send(msg_next, peer=peer)
+                    if player[1][4] != -1:
+                        player_session[3] = 0
                 player_session[0].remove(self.player_id)  # удаляем игрока из массива участников сессии
                 if len(player_session[0]) == 0:  # если в сессии не осталось игроков, то удаляем и ее
                     self.sessions.pop(player[0])
                 else:
                     self.players[player_session[0][0]][1][6] = 1  # передаем администраторские права
             self.del_player()  # удаляем игрока
+
+    def already_playing(self, game_code):
+        player_session = self.sessions[game_code][0]
+        player_list = ''
+        players_quantity = len(player_session)-1
+        for i in range(players_quantity):
+            player_id_in_session = player_session[i]
+            player_list += (self.players[player_id_in_session][2] + '\n')
+        if players_quantity == 1:
+            self.msg_send(msg_already_playing_mono + '\n' + player_list, lobby_keyboard)
+        else:
+            self.msg_send(msg_already_playing_poly + '\n' + player_list, lobby_keyboard)
 
     def join_session(self):  # вход в сессию или создание новой
         game_code = self.event.obj.text
@@ -152,20 +162,20 @@ class Bot:
             self.sessions[game_code][0].append(self.player_id)
             self.players[self.player_id][0] = game_code  # добавляем игрока в сессию
             self.msg_send(msg_join_response + game_code, lobby_keyboard)
+            self.already_playing(game_code)
 
         else:  # если ее нет, то создаем ее
-            self.sessions[game_code] = [[self.player_id], [], [0, 0, 0], 0, self.player_id]
-            print(self.player_id)
+            self.sessions[game_code] = [[self.player_id], [], [0, 0, 0, 0], 0, self.player_id]
             self.players[self.player_id][0] = game_code  # добавляем игрока в сессию в качестве администратора
             self.players[self.player_id][1][6] = 1  # присваеваем игроку флаг администратора
             self.random_hat()  # создаем шляпу случайным образом
             self.msg_send(msg_join_response_admin + game_code, admin_lobby_keyboard)
 
-    def return_lobby(self, message):  # возвращает игрока в лобби
+    def return_lobby(self):  # возвращает игрока в лобби
         if self.players[self.player_id][1][6] == 1:
-            self.msg_send(message, admin_lobby_keyboard)
+            return admin_lobby_keyboard
         else:
-            self.msg_send(message, lobby_keyboard)
+            return lobby_keyboard
 
     def start_game(self):  # начало ход
         player_id = self.player_id
@@ -185,7 +195,7 @@ class Bot:
                     # опять же, если не закончил еще тот ход, то продолжаем
                     self.msg_send(msg_stop, game_keyboard, self.players[player_id][3])
         else:
-            self.return_lobby(msg_turn_going)
+            self.msg_send(msg_turn_going, self.return_lobby())
 
     def give_word(self):  # функция выдачи игроку слова
         words_remaining = self.sessions[self.players[self.player_id][0]][1]  # массив оставшихся слов
@@ -218,7 +228,7 @@ class Bot:
             else:
                 self.pass_word()
         else:  # нужно начать ход
-            self.return_lobby(msg_need_start)
+            self.msg_send(msg_need_start, self.return_lobby())
 
     def leave_game(self):  # выход из игры
         self.leave_session()  # выходим из сессии
@@ -232,7 +242,7 @@ class Bot:
             player_points = str(self.players[player_id_in_session][1][5])
             player_results += (self.players[player_id_in_session][2] + ': ' + player_points + '\n')
             # пишем на каждой строчке - имя и количество очков каждого игрока из сессии
-        self.return_lobby(player_results)
+        self.msg_send(player_results, self.return_lobby())
 
     def queue_turn(self):
         player_session = self.sessions[self.players[self.player_id][0]]
@@ -243,7 +253,7 @@ class Bot:
                 player_queue += '  ->'
             player_queue += (self.players[player_id_in_session][2] + '\n')
             # пишем на каждой строчке - имя каждого игрока из сессии
-        self.return_lobby(player_queue)
+        self.msg_send(player_queue, self.return_lobby())
 
     @admin_required
     def start_settings(self):  # функция настроек, доступная только администратору
@@ -280,6 +290,25 @@ class Bot:
         else:
             self.msg_send(msg_input_going)
 
+    def activate_input(self): # теперь каждый игрок может вводить слова
+        player_session = self.sessions[self.players[self.player_id][0]]
+        for player in player_session[0]:
+            self.players[player][1][7] = 1
+        self.players[player_session[0][0]][1][7] = 2
+        self.msg_send(msg_add_how_many)
+
+    def add_words(self):
+        player_session = self.players[self.player_id][0]
+        if self.players[self.player_id][1][7] == 1:
+            words_quantity = self.sessions[player_session][2][3]
+            self.msg_send(msg_add_words_quantity + str(words_quantity))
+            self.msg_send(msg_how_to_add_words)
+        else:
+            if self.players[self.player_id][1][6] == 1:
+                self.msg_send(msg_add_words_denied_admin, self.return_lobby())
+            else:
+                self.msg_send(msg_add_words_denied, self.return_lobby())
+
     @admin_required
     def input_change(self):
         rank = self.event.obj.text
@@ -289,9 +318,19 @@ class Bot:
             i = 1
         elif rank == msg_change_difficult:
             i = 2
+        elif rank == msg_let_input:
+            i = 3
+            self.activate_input()
         else:
             return
-        self.input_rank(i)
+        if i != 3:
+            self.input_rank(i)
+
+    def adding_custom_words(self):
+        word_list = self.event.obj.text.split()
+        player_session = self.players[self.player_id][0]
+        self.sessions[player_session][1] += word_list
+        self.players[self.player_id][1][7] = 0
 
     def put_words(self):
         player_session = self.sessions[self.players[self.player_id][0]]
@@ -307,17 +346,24 @@ class Bot:
     @admin_required
     def random_hat(self):  # создается шляпа по умолчанию
         player_session = self.sessions[self.players[self.player_id][0]]
-        player_session[2] = [100, 100, 100]
+        player_session[2] = [100, 100, 100, 0]
         self.put_words()
         self.msg_send(msg_random_hat_created, admin_lobby_keyboard)  # возвращаем адмнистратора в админ. лобби
 
+    @admin_required
     def input_numb(self):
-        if self.event.obj.text.isdigit():  # ввели число
-            if int(self.event.obj.text) > 1000:  # проверим, не очень ли большое число ввели
+        number = self.event.obj.text
+        if number.isdigit(): # ввели число
+            number = int(number)
+            if number > 1000:  # проверим, не очень ли большое число ввели
                 self.msg_send(msg_too_big_int)
-                self.make_custom_change(1000)
+                number = 1000
+            if self.players[self.player_id][1][7] == 2:
+                self.sessions[self.players[self.player_id][0]][2][3] = number
+                self.players[self.player_id][1][7] = 1
+                self.msg_send(msg_now_adding_possible + str(number), self.return_lobby())
             else:
-                self.make_custom_change(int(self.event.obj.text))
+                self.make_custom_change(number)
         else:  # если ввел не число, говорим, что надо ввести число
             self.msg_send(msg_not_int)
 
@@ -332,9 +378,12 @@ class Bot:
                     self.begin_game()
                 elif self.player_id in self.players:
                     if self.players[self.player_id][0] is not None:
-                        if -1 in self.sessions[self.players[self.player_id][0]][2]\
+                        if (-1 in self.sessions[self.players[self.player_id][0]][2] \
+                                or self.players[self.player_id][1][7] == 2)\
                                 and self.players[self.player_id][1][6] == 1:
                             self.input_numb()
+                        elif self.players[self.player_id][1][7] == 1 and self.event.obj.text != msg_add_words:
+                            self.adding_custom_words()
                         elif self.event.obj.text in self.func_dict:
                             self.func_dict[self.event.obj.text]()
                         elif self.event.obj.text == msg_start:  # если старт - то запускаем на поток, чтобы время шло
@@ -345,6 +394,6 @@ class Bot:
                             and len(self.event.obj.text) < 10:  # условие того, что нам присылают код
                         self.func_dict[msg_join]()
                     else:
-                        self.msg_send(msg_need_join, begin_keyboard)
+                        self.msg_send(msg_need_join)
                 else:
                     self.msg_send(msg_need_begin, begin_keyboard)
