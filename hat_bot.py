@@ -1,9 +1,9 @@
 import _thread
 import random
 import time
+import os
 
 import vk_api
-from data import token_id, group_id
 from keyboards import *
 from messages_rus import *
 from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
@@ -15,8 +15,8 @@ from decorators import admin_required
 
 class Bot:
     def __init__(self):
-        self.vk_session = vk_api.VkApi(token=token_id)
-        self.long_poll = VkBotLongPoll(self.vk_session, group_id)
+        self.vk_session = vk_api.VkApi(token=os.environ['token_id'])
+        self.long_poll = VkBotLongPoll(self.vk_session, '193158607')
         self.vk = self.vk_session.get_api()
 
         self.func_dict = {  # словарь функций - что вызывать в ответ на команды игрока
