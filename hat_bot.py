@@ -223,7 +223,9 @@ class Bot:
             self.players[self.player_id][1][2] = new_word  # записываем последнее выданное слово
             self.msg_send(new_word, game_keyboard)
         else:  # если слов не осталось
-            self.end_turn()
+            self.next_queue()
+            self.null_flag()
+            self.msg_send(msg_zero_words, self.return_lobby())
 
     def done_word(self):  # функция угадывания слова
         self.players[self.player_id][1][5] += 1  # увеличиваем счет игрока
