@@ -314,6 +314,7 @@ class Bot:
 
     def activate_input(self):  # теперь каждый игрок может вводить слова
         player_session = self.sessions[self.players[self.player_id][0]]
+        player_session[1][1] = []
         for player in player_session[0]:  # теперь каждый игрок может вводить слова
             self.players[player][1][7] = 1
         self.players[player_session[0][0]][1][7] = 2  # админу даем право ввести количество слов
