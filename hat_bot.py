@@ -225,7 +225,7 @@ class Bot:
         else:  # если слов не осталось
             self.next_queue()
             self.null_flag()
-            self.msg_send(msg_zero_words, self.return_lobby())
+            self.return_lobby(msg_zero_words)
 
     def done_word(self):  # функция угадывания слова
         self.players[self.player_id][1][5] += 1  # увеличиваем счет игрока
