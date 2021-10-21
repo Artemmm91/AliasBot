@@ -1,2 +1,2 @@
-# hatbot
-A hat bot to play "Hat" online in vk https://vk.com/public193158607
+# AliasBot
+A bot to play Alias game online in Vkontakte https://vk.com/public193158607
